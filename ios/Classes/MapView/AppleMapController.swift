@@ -24,6 +24,15 @@ public class AppleMapController: NSObject, FlutterPlatformView {
         self.channel = FlutterMethodChannel(name: "apple_maps_plugin.luisthein.de/apple_maps_\(id)", binaryMessenger: registrar.messenger())
         
         self.mapView = FlutterMapView(channel: channel, options: options)
+        
+        // --- INICIO DE LA MODIFICACIÓN PARA OCULTAR PINES PREDETERMINADOS ---
+        if #available(iOS 13.0, *) {
+            self.mapView.pointOfInterestFilter = .excludingAll
+        } else {
+            self.mapView.showsPointsOfInterest = false
+        }
+        // --- FIN DE LA MODIFICACIÓN ---
+        
         self.registrar = registrar
         
         // To stop the odd movement of the Apple logo.
