@@ -1,4 +1,3 @@
-//
 //  FlutterAppleMap.swift
 //  apple_maps_flutter
 //
@@ -294,17 +293,14 @@ class FlutterMapView: MKMapView, UIGestureRecognizerDelegate {
         tiltGesture.numberOfTouchesRequired = 2
         tiltGesture.direction = .up
         tiltGesture.direction = .down
-        let doubleTapGesture = UITapGestureRecognizer(target: self, action: nil)
-        doubleTapGesture.numberOfTapsRequired = 2
         let longTapGesture = UILongPressGestureRecognizer(target: self, action: #selector(longTap))
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(onTap))
-        tapGesture.require(toFail: doubleTapGesture)    // only recognize taps that are not involved in zooming
+        
         self.addGestureRecognizer(panGesture)
         self.addGestureRecognizer(pinchGesture)
         self.addGestureRecognizer(rotateGesture)
         self.addGestureRecognizer(tiltGesture)
         self.addGestureRecognizer(longTapGesture)
-        self.addGestureRecognizer(doubleTapGesture)
         self.addGestureRecognizer(tapGesture)
     }
        
