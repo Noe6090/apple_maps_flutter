@@ -284,6 +284,11 @@ class _AppleMapState extends State<AppleMap> {
     _annotations[annotationId]?.onTap?.call();
   }
 
+  void onAnnotationLongPress(String annotationIdParam) {
+    final AnnotationId annotationId = AnnotationId(annotationIdParam);
+    _annotations[annotationId]?.onLongPress?.call();
+  }
+
   void onAnnotationDragEnd(String annotationIdParam, LatLng position) {
     final AnnotationId annotationId = AnnotationId(annotationIdParam);
     _annotations[annotationId]?.onDragEnd?.call(position);

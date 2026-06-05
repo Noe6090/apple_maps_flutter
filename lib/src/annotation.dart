@@ -152,6 +152,7 @@ class Annotation {
     this.infoWindow = InfoWindow.noText,
     this.position = const LatLng(0.0, 0.0),
     this.onTap,
+    this.onLongPress,
     this.visible = true,
     this.zIndex = -1,
     this.onDragEnd,
@@ -189,6 +190,9 @@ class Annotation {
   /// Callbacks to receive tap events for annotations placed on this map.
   final VoidCallback? onTap;
 
+  /// Callbacks to receive long press events for annotations placed on this map.
+  final VoidCallback? onLongPress;
+
   /// True if the annotation is visible.
   final bool visible;
 
@@ -214,6 +218,7 @@ class Annotation {
     bool? visibleParam,
     double? zIndexParam,
     VoidCallback? onTapParam,
+    VoidCallback? onLongPressParam,
     ValueChanged<LatLng>? onDragEndParam,
   }) {
     return Annotation(
@@ -225,6 +230,7 @@ class Annotation {
       infoWindow: infoWindowParam ?? infoWindow,
       position: positionParam ?? position,
       onTap: onTapParam ?? onTap,
+      onLongPress: onLongPressParam ?? onLongPress,
       visible: visibleParam ?? visible,
       zIndex: zIndexParam ?? zIndex,
       onDragEnd: onDragEndParam ?? onDragEnd,

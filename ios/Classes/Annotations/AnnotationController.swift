@@ -76,7 +76,25 @@ extension AppleMapController: AnnotationDelegate {
         annotationView!.alpha = CGFloat(annotation.alpha ?? 1.00)
         annotationView!.isDraggable = annotation.isDraggable ?? false
 
+        if let recognizers = annotationView!.gestureRecognizers {
+            for recognizer in recognizers {
+                if let longPress = recognizer as? AnnotationLongPressGestureRecognizer {
+                    annotationView!.removeGestureRecognizer(longPress)
+                }
+            }
+        }
+        
+        let longPressGestureRecognizer = AnnotationLongPressGestureRecognizer(target: self, action: #selector(onAnnotationLongPressed))
+        longPressGestureRecognizer.annotationId = annotation.id
+        annotationView!.addGestureRecognizer(longPressGestureRecognizer)
+
         return annotationView!
+    }
+
+    @objc func onAnnotationLongPressed(longPress: AnnotationLongPressGestureRecognizer) {
+        if longPress.state == .began, let annotationId = longPress.annotationId {
+            self.channel.invokeMethod("annotation#onLongPress", arguments: ["annotationId": annotationId])
+        }
     }
 
     func annotationsToAdd(annotations: NSArray) {
@@ -301,5 +319,9 @@ extension AppleMapController: AnnotationDelegate {
 
 class InfoWindowTapGestureRecognizer: UITapGestureRecognizer {
     var annotationView: UIView?
+    var annotationId: String?
+}
+
+class AnnotationLongPressGestureRecognizer: UILongPressGestureRecognizer {
     var annotationId: String?
 }

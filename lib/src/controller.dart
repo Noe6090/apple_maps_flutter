@@ -50,6 +50,9 @@ class AppleMapController {
       case 'annotation#onTap':
         _appleMapState.onAnnotationTap(call.arguments['annotationId']);
         break;
+      case 'annotation#onLongPress':
+        _appleMapState.onAnnotationLongPress(call.arguments['annotationId']);
+        break;
       case 'polyline#onTap':
         _appleMapState.onPolylineTap(call.arguments['polylineId']);
         break;
