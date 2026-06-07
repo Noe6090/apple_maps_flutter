@@ -17,7 +17,7 @@ extension AppleMapController: AnnotationDelegate {
             // para evitar que se acerque la cámara y se abra la ventanita.
             if let lastId = AppleMapController.lastLongPressedAnnotationId,
                lastId == annotation.id,
-               Date().timeIntervalSince(AppleMapController.lastLongPressTime) < 0.5 {
+               Date().timeIntervalSince(AppleMapController.lastLongPressTime) < 2.5 {
                 
                 // Deseleccionamos de forma nativa para ocultar la ventanita
                 mapView.deselectAnnotation(annotation, animated: false)
@@ -36,6 +36,13 @@ extension AppleMapController: AnnotationDelegate {
             }
 
             if annotation.infoWindowConsumesTapEvents {
+                if let recognizers = view.gestureRecognizers {
+                    for recognizer in recognizers {
+                        if recognizer is InfoWindowTapGestureRecognizer {
+                            view.removeGestureRecognizer(recognizer)
+                        }
+                    }
+                }
                 let tapGestureRecognizer = InfoWindowTapGestureRecognizer(target: self, action: #selector(onCalloutTapped))
                 tapGestureRecognizer.annotationId = annotation.id
                 view.addGestureRecognizer(tapGestureRecognizer)
@@ -281,6 +288,14 @@ extension AppleMapController: AnnotationDelegate {
         
         if var customView = annotationView as? ZPositionableAnnotation {
             customView.stickyZPosition = CGFloat(annotation.zIndex)
+        }
+        
+        if let recognizers = annotationView!.gestureRecognizers {
+            for recognizer in recognizers {
+                if recognizer is AnnotationLongPressGestureRecognizer {
+                    annotationView!.removeGestureRecognizer(recognizer)
+                }
+            }
         }
         
         let longPressGestureRecognizer = AnnotationLongPressGestureRecognizer(target: self, action: #selector(onAnnotationLongPressed))
