@@ -9,6 +9,9 @@ import Foundation
 import MapKit
 
 public class AppleMapController: NSObject, FlutterPlatformView {
+    public static var lastLongPressedAnnotationId: String? = nil
+    public static var lastLongPressTime: Date = Date()
+    
     var contentView: UIView
     var mapView: FlutterMapView
     var registrar: FlutterPluginRegistrar

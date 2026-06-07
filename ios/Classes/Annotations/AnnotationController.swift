@@ -179,6 +179,27 @@ extension AppleMapController: AnnotationDelegate {
         }
     }
     
+    func removeAllAnnotations() {
+        self.mapView.removeAnnotations(self.mapView.annotations)
+    }
+    
+    func selectAnnotation(with id: String) {
+        if let annotation: FlutterAnnotation = self.getAnnotation(with: id) {
+            annotation.selectedProgrammatically = true
+            self.mapView.selectAnnotation(annotation, animated: true)
+        }
+    }
+    
+    func hideAnnotation(with id: String) {
+        if let annotation: FlutterAnnotation = self.getAnnotation(with: id) {
+            self.mapView.deselectAnnotation(annotation, animated: true)
+        }
+    }
+    
+    func isAnnotationSelected(with id: String) -> Bool {
+        return self.mapView.selectedAnnotations.contains(where: { annotation in return self.getAnnotation(with: id) == (annotation as? FlutterAnnotation)})
+    }
+    
     private func removeAnnotation(id: String) {
         if let annotation: FlutterAnnotation = self.getAnnotation(with: id) {
             self.mapView.removeAnnotation(annotation)
@@ -213,7 +234,7 @@ extension AppleMapController: AnnotationDelegate {
         return isInFront
     }
     
-    private func getAnnotationView(annotation: FlutterAnnotation) -> MKAnnotationView {
+    func getAnnotationView(annotation: FlutterAnnotation) -> MKAnnotationView {
         let identifier: String = annotation.icon.iconType.identifier
         var annotationView = self.mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
         let oldAnnotation = annotationView?.annotation as? FlutterAnnotation
@@ -252,7 +273,7 @@ extension AppleMapController: AnnotationDelegate {
         annotationView!.calloutOffset = CGPoint(x: annotation.calloutOffset.x, y: annotation.calloutOffset.y)
         annotationView!.isHidden = !(annotation.isVisible ?? true)
         
-        if let customView = annotationView as? ZPositionableAnnotation {
+        if var customView = annotationView as? ZPositionableAnnotation {
             customView.stickyZPosition = CGFloat(annotation.zIndex)
         }
         
