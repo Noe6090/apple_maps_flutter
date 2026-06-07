@@ -322,6 +322,17 @@ class InfoWindowTapGestureRecognizer: UITapGestureRecognizer {
     var annotationId: String?
 }
 
-class AnnotationLongPressGestureRecognizer: UILongPressGestureRecognizer {
+// --------------------- CAMBIOS AQUÍ ---------------------
+class AnnotationLongPressGestureRecognizer: UILongPressGestureRecognizer, UIGestureRecognizerDelegate {
     var annotationId: String?
+    
+    override init(target: Any?, action: Selector?) {
+        super.init(target: target, action: action)
+        self.delegate = self
+        self.cancelsTouchesInView = false
+    }
+    
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return true
+    }
 }
