@@ -10,8 +10,25 @@ import MapKit
 
 extension AppleMapController: AnnotationDelegate {
 
+    // Variables para ignorar el toque normal justo después de un mantener pulsado
+    private static var lastLongPressedAnnotationId: String? = nil
+    private static var lastLongPressTime: Date = Date.distantPast
+
     public func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView)  {
         if let annotation: FlutterAnnotation = view.annotation as? FlutterAnnotation  {
+            
+            // Si acabamos de mantener pulsado este pin, ignoramos la selección normal
+            // para evitar que se acerque la cámara y se abra la ventanita.
+            if let lastId = AppleMapController.lastLongPressedAnnotationId,
+               lastId == annotation.id,
+               Date().timeIntervalSince(AppleMapController.lastLongPressTime) < 1.0 {
+                
+                // Deseleccionamos de forma nativa para ocultar la ventanita
+                mapView.deselectAnnotation(annotation, animated: false)
+                AppleMapController.lastLongPressedAnnotationId = nil
+                return
+            }
+
             self.currentlySelectedAnnotation = annotation.id
             if !annotation.selectedProgrammatically {
                 if !self.isAnnotationInFront(zIndex: annotation.zIndex) {
@@ -44,6 +61,8 @@ extension AppleMapController: AnnotationDelegate {
         let identifier: String = annotation.id
         var annotationView = self.mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
         let oldflutterAnnoation = annotationView?.annotation as? FlutterAnnotation
+        
+        // Crear vista si no existe o si el tipo cambió
         if annotationView == nil || oldflutterAnnoation?.icon.iconType != annotation.icon.iconType {
             if #available(iOS 11.0, *), annotation.icon.iconType == IconType.MARKER {
                 annotationView = getMarkerAnnotationView(annotation: annotation, id: identifier)
@@ -52,18 +71,36 @@ extension AppleMapController: AnnotationDelegate {
             } else {
                 annotationView = getPinAnnotationView(annotation: annotation, id: identifier)
             }
+        } else {
+            // Actualizar la vista existente con la imagen/color correctos (¡AQUÍ ESTABA EL FALLO DEL RETRASO!)
+            if #available(iOS 11.0, *), annotation.icon.iconType == IconType.MARKER {
+                if let markerView = annotationView as? FlutterMarkerAnnotationView, let hueColor = annotation.icon.hueColor {
+                    markerView.markerTintColor = UIColor(hue: CGFloat(hueColor), saturation: 1, brightness: 1, alpha: 1)
+                }
+            } else if annotation.icon.iconType == .CUSTOM_FROM_ASSET || annotation.icon.iconType == .CUSTOM_FROM_BYTES {
+                if let customView = annotationView as? FlutterAnnotationView {
+                    customView.image = annotation.icon.image
+                }
+            } else {
+                if let pinView = annotationView as? MKPinAnnotationView, let hueColor = annotation.icon.hueColor {
+                    pinView.pinTintColor = UIColor(hue: CGFloat(hueColor), saturation: 1, brightness: 1, alpha: 1)
+                }
+            }
         }
+        
         guard annotationView != nil else {
             return FlutterAnnotationView()
         }
+        
         annotationView!.annotation = annotation
-        // If annotation is not visible set alpha to 0 and don't let the user interact with it
+        
         if !annotation.isVisible! {
             annotationView!.canShowCallout = false
             annotationView!.alpha = CGFloat(0.0)
             annotationView!.isDraggable = false
             return annotationView! as! FlutterAnnotationView
         }
+        
         if annotation.icon.iconType != .MARKER {
             self.initInfoWindow(annotation: annotation, annotationView: annotationView!)
             if annotation.icon.iconType != .PIN {
@@ -72,6 +109,7 @@ extension AppleMapController: AnnotationDelegate {
                 annotationView!.centerOffset = CGPoint(x: x, y: y)
             }
         }
+        
         annotationView!.canShowCallout = true
         annotationView!.alpha = CGFloat(annotation.alpha ?? 1.00)
         annotationView!.isDraggable = annotation.isDraggable ?? false
@@ -93,6 +131,8 @@ extension AppleMapController: AnnotationDelegate {
 
     @objc func onAnnotationLongPressed(longPress: AnnotationLongPressGestureRecognizer) {
         if longPress.state == .began, let annotationId = longPress.annotationId {
+            AppleMapController.lastLongPressedAnnotationId = annotationId
+            AppleMapController.lastLongPressTime = Date()
             self.channel.invokeMethod("annotation#onLongPress", arguments: ["annotationId": annotationId])
         }
     }
@@ -108,7 +148,7 @@ extension AppleMapController: AnnotationDelegate {
         let oldAnnotations: [MKAnnotation] = self.mapView.annotations
         for annotation in annotations {
             let annotationData: Dictionary<String, Any> = annotation as! Dictionary<String, Any>
-            if let annotationToChange = oldAnnotations.filter({($0 as? FlutterAnnotation)?.id == annotationData["annotationId"] as? String})[0] as? FlutterAnnotation {
+            if let annotationToChange = oldAnnotations.filter({($0 as? FlutterAnnotation)?.id == annotationData["annotationId"] as? String}).first as? FlutterAnnotation {
                 let newAnnotation = FlutterAnnotation.init(fromDictionary: annotationData, registrar: registrar)
                 if annotationToChange != newAnnotation {
                     if !annotationToChange.wasDragged {
@@ -156,7 +196,6 @@ extension AppleMapController: AnnotationDelegate {
     func isAnnotationSelected(with id: String) -> Bool {
         return self.mapView.selectedAnnotations.contains(where: { annotation in return self.getAnnotation(with: id) == (annotation as? FlutterAnnotation)})
     }
-
 
     private func removeAnnotation(id: String) {
         if let flutterAnnotation: FlutterAnnotation = self.getAnnotation(with: id) {
@@ -207,10 +246,6 @@ extension AppleMapController: AnnotationDelegate {
         self.addAnnotation(annotation: annotation)
     }
 
-    /**
-     Checks if an Annotation with the same id exists and removes it before adding if necessary
-     - Parameter annotation: the FlutterAnnotation that should be added
-     */
     private func addAnnotation(annotation: FlutterAnnotation) {
         if self.annotationExists(with: annotation.id) {
             self.removeAnnotation(id: annotation.id)
@@ -224,6 +259,8 @@ extension AppleMapController: AnnotationDelegate {
 
     private func updateAnnotation(annotation: FlutterAnnotation) {
         if let oldAnnotation = self.getAnnotation(with: annotation.id) {
+            let oldIconType = oldAnnotation.icon.iconType
+            
             UIView.animate(withDuration: 0.32, animations: {
                 oldAnnotation.coordinate = annotation.coordinate
                 oldAnnotation.zIndex = annotation.zIndex
@@ -232,12 +269,28 @@ extension AppleMapController: AnnotationDelegate {
                 oldAnnotation.isVisible = annotation.isVisible
                 oldAnnotation.title = annotation.title
                 oldAnnotation.subtitle = annotation.subtitle
+                oldAnnotation.icon = annotation.icon // Se actualiza la imagen guardada
             })
             
-            // Update the annotation view with the new image
-            if let view = self.mapView.view(for: oldAnnotation) {
-                let newAnnotationView = getAnnotationView(annotation: annotation)
-                view.image = newAnnotationView.image
+            if oldIconType != annotation.icon.iconType {
+                self.mapView.removeAnnotation(oldAnnotation)
+                self.mapView.addAnnotation(oldAnnotation)
+            } else {
+                if let view = self.mapView.view(for: oldAnnotation) {
+                    if #available(iOS 11.0, *), annotation.icon.iconType == IconType.MARKER {
+                        if let markerView = view as? FlutterMarkerAnnotationView, let hueColor = annotation.icon.hueColor {
+                            markerView.markerTintColor = UIColor(hue: CGFloat(hueColor), saturation: 1, brightness: 1, alpha: 1)
+                        }
+                    } else if annotation.icon.iconType == .CUSTOM_FROM_ASSET || annotation.icon.iconType == .CUSTOM_FROM_BYTES {
+                        if let customView = view as? FlutterAnnotationView {
+                            customView.image = annotation.icon.image // Forzamos cambio visual
+                        }
+                    } else {
+                        if let pinView = view as? MKPinAnnotationView, let hueColor = annotation.icon.hueColor {
+                            pinView.pinTintColor = UIColor(hue: CGFloat(hueColor), saturation: 1, brightness: 1, alpha: 1)
+                        }
+                    }
+                }
             }
         }
     }
@@ -265,7 +318,7 @@ extension AppleMapController: AnnotationDelegate {
         pinAnnotationView.layer.zPosition = annotation.zIndex
 
         if let hueColor: Double = annotation.icon.hueColor {
-            pinAnnotationView.pinTintColor = UIColor.init(hue: hueColor, saturation: 1, brightness: 1, alpha: 1)
+            pinAnnotationView.pinTintColor = UIColor.init(hue: CGFloat(hueColor), saturation: 1, brightness: 1, alpha: 1)
         }
 
         return pinAnnotationView
@@ -278,7 +331,7 @@ extension AppleMapController: AnnotationDelegate {
         markerAnnotationView.stickyZPosition = annotation.zIndex
 
         if let hueColor: Double = annotation.icon.hueColor {
-            markerAnnotationView.markerTintColor = UIColor.init(hue: hueColor, saturation: 1, brightness: 1, alpha: 1)
+            markerAnnotationView.markerTintColor = UIColor.init(hue: CGFloat(hueColor), saturation: 1, brightness: 1, alpha: 1)
         }
 
         return markerAnnotationView
@@ -322,7 +375,6 @@ class InfoWindowTapGestureRecognizer: UITapGestureRecognizer {
     var annotationId: String?
 }
 
-// --------------------- CAMBIOS AQUÍ ---------------------
 class AnnotationLongPressGestureRecognizer: UILongPressGestureRecognizer, UIGestureRecognizerDelegate {
     var annotationId: String?
     
