@@ -159,13 +159,20 @@ extension AppleMapController: AnnotationDelegate {
                         }
                     } else if annotation.icon.iconType == .CUSTOM_FROM_ASSET || annotation.icon.iconType == .CUSTOM_FROM_BYTES {
                         if let customView = view as? FlutterAnnotationView {
-                            customView.image = annotation.icon.image
                             if iconChanged {
-                                // Forzamos al pin a repintarse en pantalla inmediatamente
-                                customView.setNeedsLayout()
-                                customView.setNeedsDisplay()
-                                customView.layer.contents = annotation.icon.image?.cgImage
-                                customView.layer.setNeedsDisplay()
+                                // Lo metemos en un bloque asíncrono para que MapKit
+                                // suelte el bloqueo de selección antes de aplicar la nueva imagen de Flutter.
+                                DispatchQueue.main.async {
+                                    customView.image = annotation.icon.image
+                                    customView.layer.contents = annotation.icon.image?.cgImage
+                                    
+                                    // Forzamos al pin a repintarse en pantalla
+                                    customView.setNeedsLayout()
+                                    customView.setNeedsDisplay()
+                                    customView.layer.setNeedsDisplay()
+                                }
+                            } else {
+                                customView.image = annotation.icon.image
                             }
                         }
                     } else {
