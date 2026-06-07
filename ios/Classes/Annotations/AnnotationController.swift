@@ -14,12 +14,10 @@ extension AppleMapController: AnnotationDelegate {
         if let annotation: FlutterAnnotation = view.annotation as? FlutterAnnotation  {
             
             // Si acabamos de levantar el dedo de mantener pulsado este pin, ignoramos la selección normal
-            // para evitar que se acerque la cámara y se abra la ventanita.
             if let lastId = AppleMapController.lastLongPressedAnnotationId,
                lastId == annotation.id,
-               Date().timeIntervalSince(AppleMapController.lastLongPressTime) < 2.5 {
+               Date().timeIntervalSince(AppleMapController.lastLongPressTime) < 0.5 {
                 
-                // Deseleccionamos de forma nativa para ocultar la ventanita
                 mapView.deselectAnnotation(annotation, animated: false)
                 AppleMapController.lastLongPressedAnnotationId = nil
                 return
@@ -27,25 +25,31 @@ extension AppleMapController: AnnotationDelegate {
             
             self.currentlySelectedAnnotation = annotation.id
             if !annotation.selectedProgrammatically {
-                if !self.isAnnotationInFront(zIndex: annotation.zIndex) {
-                    self.moveToFront(annotation: annotation)
-                }
                 self.onAnnotationClick(annotation: annotation)
+                
+                // SOLUCIÓN 1: Movemos esto a un hilo asíncrono para que no bloquee el renderizado de selección
+                DispatchQueue.main.async {
+                    if !self.isAnnotationInFront(zIndex: annotation.zIndex) {
+                        self.moveToFront(annotation: annotation)
+                    }
+                }
             } else {
                 annotation.selectedProgrammatically = false
             }
 
             if annotation.infoWindowConsumesTapEvents {
-                if let recognizers = view.gestureRecognizers {
-                    for recognizer in recognizers {
-                        if recognizer is InfoWindowTapGestureRecognizer {
-                            view.removeGestureRecognizer(recognizer)
-                        }
+                // SOLUCIÓN 2: Solo añadimos el gesto si NO lo tiene ya
+                let hasTap = view.gestureRecognizers?.contains(where: { $0 is InfoWindowTapGestureRecognizer }) ?? false
+                if !hasTap {
+                    let tapGestureRecognizer = InfoWindowTapGestureRecognizer(target: self, action: #selector(onCalloutTapped))
+                    tapGestureRecognizer.annotationId = annotation.id
+                    view.addGestureRecognizer(tapGestureRecognizer)
+                } else {
+                    // Si ya lo tiene, solo actualizamos el ID por si la vista fue reciclada
+                    if let existingTap = view.gestureRecognizers?.first(where: { $0 is InfoWindowTapGestureRecognizer }) as? InfoWindowTapGestureRecognizer {
+                        existingTap.annotationId = annotation.id
                     }
                 }
-                let tapGestureRecognizer = InfoWindowTapGestureRecognizer(target: self, action: #selector(onCalloutTapped))
-                tapGestureRecognizer.annotationId = annotation.id
-                view.addGestureRecognizer(tapGestureRecognizer)
             }
         }
     }
@@ -152,7 +156,7 @@ extension AppleMapController: AnnotationDelegate {
                 oldAnnotation.isVisible = annotation.isVisible
                 oldAnnotation.title = annotation.title
                 oldAnnotation.subtitle = annotation.subtitle
-                oldAnnotation.icon = annotation.icon // Se actualiza la imagen guardada
+                oldAnnotation.icon = annotation.icon
             })
             
             if oldIconType != annotation.icon.iconType {
@@ -167,13 +171,10 @@ extension AppleMapController: AnnotationDelegate {
                     } else if annotation.icon.iconType == .CUSTOM_FROM_ASSET || annotation.icon.iconType == .CUSTOM_FROM_BYTES {
                         if let customView = view as? FlutterAnnotationView {
                             if iconChanged {
-                                // Lo metemos en un bloque asíncrono para que MapKit
-                                // suelte el bloqueo de selección antes de aplicar la nueva imagen de Flutter.
+                                // SOLUCIÓN 3: Hilo asíncrono para forzar el repintado de la nueva imagen
                                 DispatchQueue.main.async {
                                     customView.image = annotation.icon.image
                                     customView.layer.contents = annotation.icon.image?.cgImage
-                                    
-                                    // Forzamos al pin a repintarse en pantalla
                                     customView.setNeedsLayout()
                                     customView.setNeedsDisplay()
                                     customView.layer.setNeedsDisplay()
@@ -247,7 +248,7 @@ extension AppleMapController: AnnotationDelegate {
         return isInFront
     }
     
-    func getAnnotationView(annotation: FlutterAnnotation) -> MKAnnotationView {
+    public func getAnnotationView(annotation: FlutterAnnotation) -> MKAnnotationView {
         let identifier: String = annotation.icon.iconType.identifier
         var annotationView = self.mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
         let oldAnnotation = annotationView?.annotation as? FlutterAnnotation
@@ -290,17 +291,22 @@ extension AppleMapController: AnnotationDelegate {
             customView.stickyZPosition = CGFloat(annotation.zIndex)
         }
         
+        // SOLUCIÓN 4: Evitar duplicados de LongPressGestures para no romper el Selection Mode
+        var hasLongPress = false
         if let recognizers = annotationView!.gestureRecognizers {
             for recognizer in recognizers {
-                if recognizer is AnnotationLongPressGestureRecognizer {
-                    annotationView!.removeGestureRecognizer(recognizer)
+                if let longPress = recognizer as? AnnotationLongPressGestureRecognizer {
+                    longPress.annotationId = annotation.id // Actualizamos ID
+                    hasLongPress = true
                 }
             }
         }
         
-        let longPressGestureRecognizer = AnnotationLongPressGestureRecognizer(target: self, action: #selector(onAnnotationLongPressed))
-        longPressGestureRecognizer.annotationId = annotation.id
-        annotationView!.addGestureRecognizer(longPressGestureRecognizer)
+        if !hasLongPress {
+            let longPressGestureRecognizer = AnnotationLongPressGestureRecognizer(target: self, action: #selector(onAnnotationLongPressed))
+            longPressGestureRecognizer.annotationId = annotation.id
+            annotationView!.addGestureRecognizer(longPressGestureRecognizer)
+        }
         
         return annotationView!
     }
