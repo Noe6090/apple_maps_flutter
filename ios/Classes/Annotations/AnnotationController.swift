@@ -92,7 +92,6 @@ extension AppleMapController: AnnotationDelegate {
     
     func onAnnotationClick(annotation: MKAnnotation) {
         if let flutterAnnotation: FlutterAnnotation = annotation as? FlutterAnnotation {
-            flutterAnnotation.wasDragged = true
             self.channel.invokeMethod("annotation#onTap", arguments: ["annotationId": flutterAnnotation.id])
         }
     }
