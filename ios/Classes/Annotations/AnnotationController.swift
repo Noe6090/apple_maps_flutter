@@ -248,7 +248,7 @@ extension AppleMapController: AnnotationDelegate {
         return isInFront
     }
     
-    public func getAnnotationView(annotation: FlutterAnnotation) -> MKAnnotationView {
+    func getAnnotationView(annotation: FlutterAnnotation) -> MKAnnotationView {
         let identifier: String = annotation.icon.iconType.identifier
         var annotationView = self.mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
         let oldAnnotation = annotationView?.annotation as? FlutterAnnotation
